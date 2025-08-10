@@ -1,0 +1,248 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dungeon & Stone — Sheets</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="theme-color" content="#14b8a6">
+<style>
+  body{margin:0;font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;background:#0b1220;color:#e5e7eb}
+  header{display:flex;align-items:center;gap:10px;padding:14px;border-bottom:1px solid rgba(255,255,255,.08);background:#0f172a;position:sticky;top:0;z-index:2}
+  .logo{width:36px;height:36px;border-radius:10px}
+  h1{font-size:18px;margin:0}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  .panel{background:#0c1322;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.35);margin-bottom:14px}
+  label{display:block;font-size:12px;color:#94a3b8;margin:6px 0}
+  input,textarea{width:100%;background:#0b1020;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#e5e7eb;padding:10px}
+  table{width:100%;border-collapse:collapse}
+  th,td{border:1px solid rgba(255,255,255,.12);padding:6px 8px;text-align:left}
+  th{background:#0d162a}
+  .grid{display:grid;gap:12px}
+  .cols-2{grid-template-columns:1fr 1fr}
+  @media (max-width:900px){.cols-2{grid-template-columns:1fr}}
+  .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.15);font-size:12px;color:#cbd5e1}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .mini{font-size:12px;color:#94a3b8}
+  .btn{appearance:none;border:0;border-radius:10px;background:#14b8a6;color:#062b27;padding:10px 12px;font-weight:700;cursor:pointer}
+  .btn.secondary{background:#334155;color:#e5e7eb}
+</style>
+</head>
+<body>
+  <header>
+    <img class="logo" src="icons/icon-180.png" alt=""/>
+    <div><h1>Dungeon & Stone — Character Sheets</h1><div class="mini">Offline-ready • Saves in your browser</div></div>
+    <div style="margin-left:auto" class="row">
+      <button class="btn" id="newBtn">New</button>
+      <button class="btn secondary" id="exportBtn">Export</button>
+      <label class="btn secondary" style="cursor:pointer">Import <input id="importFile" type="file" accept="application/json" style="display:none"></label>
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="panel grid cols-2">
+      <section class="grid">
+        <div class="row">
+          <div style="flex:1">
+            <label>Name</label><input id="name" placeholder="Character Name"/>
+          </div>
+          <div style="width:180px">
+            <label>Rank/Level</label><input id="rank" placeholder=""/>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex:1"><label>Role/Class</label><input id="role"/></div>
+          <div style="flex:1"><label>Origin/Species</label><input id="origin"/></div>
+        </div>
+        <div class="row">
+          <div style="flex:1"><label>Player</label><input id="player"/></div>
+          <div style="flex:1"><label>Campaign</label><input id="campaign"/></div>
+        </div>
+      </section>
+      <section class="grid">
+        <div class="row">
+          <span class="pill">Total Weight: <b id="tw">0</b></span>
+          <span class="pill">Carry Limit: <b id="cl">0</b></span>
+          <span class="mini">Carry = Strength × <input id="cm" type="number" value="15" style="width:70px"></span>
+        </div>
+        <div class="grid">
+          <label>Notes / Backstory</label>
+          <textarea id="notes" rows="5"></textarea>
+        </div>
+      </section>
+    </div>
+
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><b>Core Attributes</b><span class="mini">Totals auto-calc</span></div>
+      <table id="attr">
+        <thead><tr><th>Attribute</th><th>Base</th><th>Essence</th><th>Gear</th><th>Temp</th><th>Total</th><th>Notes</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="panel grid cols-2">
+      <section>
+        <b>Resistances</b>
+        <table id="res">
+          <thead><tr><th>Type</th><th>Perm</th><th>Essence</th><th>Gear</th><th>Temp</th><th>Total</th><th>Notes</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+      <section>
+        <b>Inventory</b> <button class="btn secondary" id="addItem">Add Item</button>
+        <table id="inv">
+          <thead><tr><th>Item</th><th style="width:90px">Qty</th><th style="width:120px">Weight</th><th>Notes</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
+
+    <div class="panel">
+      <b>Free Notes</b>
+      <textarea id="free" rows="6"></textarea>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const $ = s=>document.querySelector(s);
+  const $$ = s=>Array.from(document.querySelectorAll(s));
+  const STORE='dsheets.v1';
+
+  const ATTRS=['Strength','Agility','Endurance','Intelligence','Spirit','Luck'];
+  const RES=['Physical','Magic/Mana','Exorcism','Mentality','Control','Poison','Chill/Cold','Flame/Fire','Lightning','Earth','Divinity','Darkness','Corruption'];
+
+  let state = { name:'', rank:'', role:'', origin:'', player:'', campaign:'', cm:15, notes:'', free:'',
+                attrs: Object.fromEntries(ATTRS.map(a=>[a,{base:0, essence:0, gear:0, temp:0, total:0, notes:''}])),
+                res: Object.fromEntries(RES.map(r=>[r,{perm:0, essence:0, gear:0, temp:0, total:0, notes:''}])),
+                inv: [] };
+
+  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); }
+  function load(){ try{ Object.assign(state, JSON.parse(localStorage.getItem(STORE)||'{}')); }catch(_){} }
+
+  function bindBasic(){
+    [['#name','name'],['#rank','rank'],['#role','role'],['#origin','origin'],['#player','player'],['#campaign','campaign'],['#notes','notes'],['#free','free']]
+      .forEach(([sel,key])=> { const el=$(sel); el.value = state[key]||''; el.oninput=()=>{ state[key]=el.value; save(); }; });
+    const cm = $('#cm'); cm.value = state.cm||15; cm.oninput=()=>{ state.cm = Number(cm.value||15); save(); computeCarry(); };
+  }
+
+  function renderAttrs(){
+    const body = $('#attr tbody'); body.innerHTML='';
+    for(const a of ATTRS){
+      const r = state.attrs[a] || {base:0, essence:0, gear:0, temp:0, total:0, notes:''};
+      const tr = document.createElement('tr');
+      tr.innerHTML = \`<td>\${a}</td>
+      <td><input type="number" step="1" data-a="\${a}" data-k="base" value="\${r.base}"></td>
+      <td><input type="number" step="1" data-a="\${a}" data-k="essence" value="\${r.essence}"></td>
+      <td><input type="number" step="1" data-a="\${a}" data-k="gear" value="\${r.gear}"></td>
+      <td><input type="number" step="1" data-a="\${a}" data-k="temp" value="\${r.temp}"></td>
+      <td class="total" data-a="\${a}">\${r.total||0}</td>
+      <td><input data-a="\${a}" data-k="notes" value="\${r.notes||''}"></td>\`;
+      body.appendChild(tr);
+    }
+    body.querySelectorAll('input').forEach(inp=>{
+      inp.oninput=()=>{
+        const a=inp.dataset.a, k=inp.dataset.k;
+        if(k==='notes') state.attrs[a].notes = inp.value;
+        else { state.attrs[a][k] = Number(inp.value||0); state.attrs[a].total = (state.attrs[a].base||0)+(state.attrs[a].essence||0)+(state.attrs[a].gear||0)+(state.attrs[a].temp||0); }
+        save(); updateAttrTotals(); computeCarry();
+      };
+    });
+    updateAttrTotals();
+  }
+  function updateAttrTotals(){
+    $$('#attr .total').forEach(td=>{ const a=td.dataset.a; td.textContent = state.attrs[a]?.total ?? 0; });
+  }
+
+  function renderRes(){
+    const body = $('#res tbody'); body.innerHTML='';
+    for(const t of RES){
+      const r = state.res[t] || {perm:0, essence:0, gear:0, temp:0, total:0, notes:''};
+      const tr = document.createElement('tr');
+      tr.innerHTML = \`<td>\${t}</td>
+      <td><input type="number" step="1" data-t="\${t}" data-k="perm" value="\${r.perm}"></td>
+      <td><input type="number" step="1" data-t="\${t}" data-k="essence" value="\${r.essence}"></td>
+      <td><input type="number" step="1" data-t="\${t}" data-k="gear" value="\${r.gear}"></td>
+      <td><input type="number" step="1" data-t="\${t}" data-k="temp" value="\${r.temp}"></td>
+      <td class="rtotal" data-t="\${t}">\${r.total||0}</td>
+      <td><input data-t="\${t}" data-k="notes" value="\${r.notes||''}"></td>\`;
+      body.appendChild(tr);
+    }
+    body.querySelectorAll('input').forEach(inp=>{
+      inp.oninput=()=>{
+        const t=inp.dataset.t, k=inp.dataset.k;
+        if(k==='notes') state.res[t].notes = inp.value;
+        else { state.res[t][k] = Number(inp.value||0); state.res[t].total = (state.res[t].perm||0)+(state.res[t].essence||0)+(state.res[t].gear||0)+(state.res[t].temp||0); }
+        save(); $$('#res .rtotal').forEach(td=>{ const x=td.dataset.t; td.textContent = state.res[x]?.total ?? 0; });
+      };
+    });
+  }
+
+  function renderInv(){
+    const body = $('#inv tbody'); body.innerHTML='';
+    state.inv.forEach((it, idx)=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = \`<td><input value="\${it.name||''}" data-idx="\${idx}" data-k="name"></td>
+      <td><input type="number" step="1" value="\${it.qty||1}" data-idx="\${idx}" data-k="qty"></td>
+      <td><input type="number" step="any" value="\${it.weight||0}" data-idx="\${idx}" data-k="weight"></td>
+      <td><input value="\${it.notes||''}" data-idx="\${idx}" data-k="notes"></td>
+      <td><button class="btn secondary" data-del="\${idx}">Delete</button></td>\`;
+      body.appendChild(tr);
+    });
+    body.querySelectorAll('input').forEach(inp=>{
+      inp.oninput=()=>{
+        const i=Number(inp.dataset.idx), k=inp.dataset.k, v = (inp.type==='number') ? Number(inp.value||0) : inp.value;
+        state.inv[i][k]=v; save(); computeWeight();
+      };
+    });
+    body.querySelectorAll('[data-del]').forEach(btn=> btn.onclick=()=>{ const i=Number(btn.dataset.del); state.inv.splice(i,1); save(); renderInv(); computeWeight(); });
+    computeWeight();
+  }
+  function computeWeight(){
+    const total = (state.inv||[]).reduce((s,it)=> s + (Number(it.weight||0)*Number(it.qty||0)), 0);
+    $('#tw').textContent = total.toFixed(2);
+  }
+  function computeCarry(){
+    const str = state.attrs['Strength']?.total || 0;
+    const cm = Number(state.cm||15);
+    $('#cl').textContent = (str*cm).toFixed(0);
+  }
+
+  // Add item button
+  $('#addItem').onclick=()=>{ state.inv.push({name:'',qty:1,weight:0,notes:''}); save(); renderInv(); };
+
+  // Export/import
+  $('#exportBtn').onclick=()=>{
+    const payload = { meta:{app:'dungeon-stone-sheets',v:1,exportedAt:new Date().toISOString()}, state };
+    const blob = new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download='dungeon-stone-export.json'; a.click(); URL.revokeObjectURL(url);
+  };
+  $('#importFile').onchange = (e)=>{
+    const file = e.target.files?.[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{ try{
+      const parsed = JSON.parse(ev.target.result);
+      if(parsed && parsed.state){ state = Object.assign(state, parsed.state); save(); init(); alert('Imported!'); }
+      else alert('Not a valid export.');
+    }catch(_){ alert('Could not read file.'); } };
+    reader.readAsText(file); e.target.value='';
+  };
+
+  // New
+  $('#newBtn').onclick=()=>{ localStorage.removeItem(STORE); state = { ...state, name:'', rank:'', role:'', origin:'', player:'', campaign:'', notes:'', free:'', inv:[] }; save(); init(); };
+
+  // Init
+  function init(){
+    load(); bindBasic(); renderAttrs(); renderRes(); renderInv(); computeCarry(); computeWeight();
+  }
+  init();
+
+  // Register SW
+  if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(console.error)); }
+})();
+</script>
+</body>
+</html>
